@@ -4,8 +4,8 @@ import numpy as np
 import os
 import nibabel as nib
 
-training_data_path = "data/MICCAI13_SegChallenge/Training_100"
-testing_data_path = "data/MICCAI13_SegChallenge/Testing_50"
+training_data_path = "/vol/bitbucket/jhc4318/fyp/datasets/MICCAI13_SegChallenge/Training_100"
+testing_data_path = "/vol/bitbucket/jhc4318/fyp/datasets/MICCAI13_SegChallenge/Testing_100"
 val_ratio = 0.3
 seed = 100
 preserving_ratio = 0.1 # filter out 2d images containing < 10% non-zeros
@@ -90,7 +90,7 @@ X_test = np.asarray(X_test)
 X_test = X_test[:, :, :, np.newaxis]
 
 # save data into pickle format
-data_saving_path = 'data/MICCAI13_SegChallenge/'
+data_saving_path = '/vol/bitbucket/jhc4318/fyp/data/MICCAI13_SegChallenge/'
 tl.files.exists_or_mkdir(data_saving_path)
 
 print("save training set into pickle format")

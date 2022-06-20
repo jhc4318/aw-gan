@@ -1,1 +1,6 @@
 .idea
+*.out
+*.npz
+.vscode
+__pycache__
+*.sh

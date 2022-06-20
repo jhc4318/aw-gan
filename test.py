@@ -121,6 +121,11 @@ def main_test():
 
     print('[*] start testing ... ')
 
+    """TESTING FIX"""
+    init = tf.initialize_all_variables() 
+    sess.run(init)
+    """END FIX"""
+    
     x_gen = sess.run(net_test.outputs, {t_image_bad: X_samples_bad})
     x_gen_0_1 = (x_gen + 1) / 2
 

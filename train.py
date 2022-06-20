@@ -9,19 +9,20 @@ def main_train():
     mask_perc = tl.global_flag['maskperc']
     mask_name = tl.global_flag['mask']
     model_name = tl.global_flag['model']
+    save_path = "/vol/bitbucket/jhc4318/fyp/"
 
     # =================================== BASIC CONFIGS =================================== #
 
     print('[*] run basic configs ... ')
 
-    log_dir = "log_{}_{}_{}".format(model_name, mask_name, mask_perc)
+    log_dir = "{}log_{}_{}_{}".format(save_path, model_name, mask_name, mask_perc)
     tl.files.exists_or_mkdir(log_dir)
     log_all, log_eval, log_50, log_all_filename, log_eval_filename, log_50_filename = logging_setup(log_dir)
 
-    checkpoint_dir = "checkpoint_{}_{}_{}".format(model_name, mask_name, mask_perc)
+    checkpoint_dir = "{}checkpoint_{}_{}_{}".format(save_path, model_name, mask_name, mask_perc)
     tl.files.exists_or_mkdir(checkpoint_dir)
 
-    save_dir = "samples_{}_{}_{}".format(model_name, mask_name, mask_perc)
+    save_dir = "{}samples_{}_{}_{}".format(save_path, model_name, mask_name, mask_perc)
     tl.files.exists_or_mkdir(save_dir)
 
     # configs
@@ -48,9 +49,12 @@ def main_train():
     training_data_path = config.TRAIN.training_data_path
     val_data_path = config.TRAIN.val_data_path
     testing_data_path = config.TRAIN.testing_data_path
+    print(training_data_path)
 
     with open(training_data_path, 'rb') as f:
         X_train = pickle.load(f)
+    
+    print("loaded train")
 
     with open(val_data_path, 'rb') as f:
         X_val = pickle.load(f)
