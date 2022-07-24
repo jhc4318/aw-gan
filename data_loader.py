@@ -4,8 +4,8 @@ import numpy as np
 import os
 import nibabel as nib
 
-training_data_path = "/vol/bitbucket/jhc4318/fyp/datasets/MICCAI13_SegChallenge/Training_100"
-testing_data_path = "/vol/bitbucket/jhc4318/fyp/datasets/MICCAI13_SegChallenge/Testing_100"
+training_data_path = "/vol/bitbucket/jhc4318/fyp/datasets/MICCAI13_SegChallenge/Training_5"
+testing_data_path = "/vol/bitbucket/jhc4318/fyp/datasets/MICCAI13_SegChallenge/Testing_1"
 val_ratio = 0.3
 seed = 100
 preserving_ratio = 0.1 # filter out 2d images containing < 10% non-zeros

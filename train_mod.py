@@ -121,6 +121,11 @@ def main_train():
     net_vgg_conv4_good, _ = vgg16_cnn_emb(t_image_good_244, reuse=False)
     net_vgg_conv4_gen, _ = vgg16_cnn_emb(tf.tile(tf.image.resize_images(net.outputs, [244, 244]), [1, 1, 1, 3]), reuse=True)
 
+    # ==================================== TRY SET WEIGHTINGS TO BE VARIABLE ==================================== #
+
+    g_alpha_v = tf.Variable(g_alpha)
+    g_beta_v = tf.Variable(g_beta)
+
     # ==================================== DEFINE LOSS ==================================== #
 
     print('[*] define loss functions ... ')
@@ -150,7 +155,7 @@ def main_train():
     g_fft = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(fft_good_abs, fft_gen_abs), axis=[1, 2]))
 
     # generator loss (total)
-    g_loss = g_adv * g_loss + g_alpha * g_nmse + g_gamma * g_perceptual + g_beta * g_fft
+    g_loss = g_adv * g_loss + g_alpha_v * g_nmse + g_gamma * g_perceptual + g_beta_v * g_fft
 
     # nmse metric for testing purpose
     nmse_a_0_1 = tf.sqrt(tf.reduce_sum(tf.squared_difference(t_gen, t_image_good), axis=[1, 2, 3]))
@@ -238,7 +243,20 @@ def main_train():
     best_nmse = np.inf
     best_epoch = 1
     esn = early_stopping_num
+    alpha_decay = 1
+    beta_decay = 1
+
     for epoch in range(0, n_epoch):
+        alpha_decay *= 0.1
+        beta_decay *= 0.1
+        sess.run(tf.assign(g_alpha_v, g_alpha * alpha_decay))
+        sess.run(tf.assign(g_beta_v, g_beta * beta_decay))
+        log = " ** new alpha: %f" % (g_alpha * alpha_decay)
+        print(log)
+        log_all.debug(log)
+        log = " ** new beta: %f" % (g_beta * beta_decay)
+        print(log)
+        log_all.debug(log)
 
         # learning rate decay
         if epoch != 0 and (epoch % decay_every == 0):
@@ -247,6 +265,7 @@ def main_train():
             log = " ** new learning rate: %f" % (lr * new_lr_decay)
             print(log)
             log_all.debug(log)
+            
         elif epoch == 0:
             log = " ** init lr: %f  decay_every_epoch: %d, lr_decay: %f" % (lr, decay_every, lr_decay)
             print(log)

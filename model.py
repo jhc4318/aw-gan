@@ -1,5 +1,6 @@
 from tensorlayer.layers import *
 from utils import *
+from skimage import feature, color
 
 
 def discriminator(input_images, is_train=True, reuse=False):
@@ -157,6 +158,7 @@ def u_net_bn(x, is_train=False, reuse=False, is_refine=False):
         up0 = DeConv2d(up0, 64, (4, 4), out_size=(256, 256), strides=(2, 2), padding='SAME',
                        act=None, W_init=w_init, b_init=b_init, name='deconv0')
         up0 = BatchNormLayer(up0, act=tf.nn.relu, is_train=is_train, gamma_init=gamma_init, name='dbn0')
+        print(up0)
 
         if is_refine:
             out = Conv2d(up0, 1, (1, 1), act=tf.nn.tanh, name='out')
