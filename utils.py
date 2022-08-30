@@ -80,6 +80,67 @@ def logging_setup(log_dir):
 
     return log_all, log_eval, log_50, log_all_filename, log_eval_filename, log_50_filename
 
+def update_weights(alpha_per, beta_per, action, step, min_val, max_val):
+    if action == 0:
+        alpha_per += step
+    elif action == 1:
+        beta_per += step
+    elif action == 2:
+        pass
+    elif action == 3:
+        alpha_per -= step
+    else:
+        beta_per -= step
+
+    if alpha_per < min_val:
+        alpha_per = min_val
+
+    if beta_per < min_val:
+        beta_per = min_val
+
+    if alpha_per > max_val:
+        alpha_per = max_val
+
+    if beta_per > max_val:
+        beta_per = max_val
+
+    return alpha_per, beta_per
+
+def update_weights_v2(alpha_per, beta_per, action, factor, min_val, max_val):
+    if action == 0:
+        alpha_per *= factor
+    elif action == 1:
+        beta_per *= factor
+    elif action == 2:
+        pass
+    elif action == 3:
+        alpha_per /= factor
+    else:
+        beta_per /= factor
+
+    if alpha_per < min_val:
+        alpha_per = min_val
+
+    if beta_per < min_val:
+        beta_per = min_val
+
+    if alpha_per > max_val:
+        alpha_per = max_val
+
+    if beta_per > max_val:
+        beta_per = max_val
+
+    return alpha_per, beta_per
+
+def insert(array, val):
+    array[1:] = array[0:-1]
+    array[0] = val
+
+def scale(arr):
+  signs = np.sign(arr)
+  arr = np.log(np.abs(arr) + 1)
+  arr *= signs
+  return arr
 
 if __name__ == "__main__":
     pass

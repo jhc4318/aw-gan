@@ -302,5 +302,17 @@ def vgg16_cnn_emb(t_image, reuse=False):
         return conv4, network
 
 
+def pg_net(x, is_train=False, reuse=False):
+    with tf.variable_scope("pg_net", reuse=reuse):
+        tl.layers.set_name_reuse(reuse)
+        inputs = InputLayer(x, name="input")
+
+        network = DenseLayer(inputs, n_units=30, act=tf.nn.relu, name="dense1")
+        # network = DenseLayer(network, n_units=50, act=tf.nn.relu, name="dense2")
+        network = DenseLayer(network, n_units=5, act=tf.nn.relu, name="dense3")
+
+        return network
+
+
 if __name__ == "__main__":
     pass

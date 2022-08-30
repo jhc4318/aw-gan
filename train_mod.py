@@ -38,6 +38,8 @@ def main_train():
     beta1 = config.TRAIN.beta1
     n_epoch = config.TRAIN.n_epoch
     sample_size = config.TRAIN.sample_size
+    episode_size = config.TRAIN.episode_size
+    history_size = config.TRAIN.history_size
 
     log_config(log_all_filename, config)
     log_config(log_eval_filename, config)
@@ -99,6 +101,11 @@ def main_train():
     t_gen = tf.placeholder('float32', [batch_size, nw, nh, nz], name='generated_image_for_test')
     t_gen_sample = tf.placeholder('float32', [sample_size, nw, nh, nz], name='generated_sample_image_for_test')
     t_image_good_244 = tf.placeholder('float32', [batch_size, 244, 244, 3], name='vgg_good_image')
+    t_alpha = tf.placeholder('float32', [None], name='alpha')
+    t_beta = tf.placeholder('float32', [None], name='beta')
+    t_states = tf.placeholder('float32', [None, 5 * history_size], name='states')
+    t_actions = tf.placeholder(tf.int32, shape=[None])
+    t_discount_rewards = tf.placeholder(tf.float32, shape=[None])
 
     # define generator network
     if tl.global_flag['model'] == 'unet':
@@ -121,10 +128,10 @@ def main_train():
     net_vgg_conv4_good, _ = vgg16_cnn_emb(t_image_good_244, reuse=False)
     net_vgg_conv4_gen, _ = vgg16_cnn_emb(tf.tile(tf.image.resize_images(net.outputs, [244, 244]), [1, 1, 1, 3]), reuse=True)
 
-    # ==================================== TRY SET WEIGHTINGS TO BE VARIABLE ==================================== #
-
-    g_alpha_v = tf.Variable(g_alpha)
-    g_beta_v = tf.Variable(g_beta)
+    # define PG network
+    weights_net = pg_net(t_states, is_train=True, reuse=False)
+    probs = weights_net.outputs
+    sampling_prob = tf.nn.softmax(probs)
 
     # ==================================== DEFINE LOSS ==================================== #
 
@@ -155,7 +162,10 @@ def main_train():
     g_fft = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(fft_good_abs, fft_gen_abs), axis=[1, 2]))
 
     # generator loss (total)
-    g_loss = g_adv * g_loss + g_alpha_v * g_nmse + g_gamma * g_perceptual + g_beta_v * g_fft
+    g_loss = g_adv * g_loss + t_alpha * g_nmse + g_gamma * g_perceptual + t_beta * g_fft
+
+    # policy gradient loss
+    pg_loss = tl.rein.cross_entropy_reward_loss(probs, t_actions, t_discount_rewards)
 
     # nmse metric for testing purpose
     nmse_a_0_1 = tf.sqrt(tf.reduce_sum(tf.squared_difference(t_gen, t_image_good), axis=[1, 2, 3]))
@@ -172,12 +182,14 @@ def main_train():
 
     g_vars = tl.layers.get_variables_with_name('u_net', True, True)
     d_vars = tl.layers.get_variables_with_name('discriminator', True, True)
+    pg_vars = tl.layers.get_variables_with_name('pg_net', True, True)
 
     with tf.variable_scope('learning_rate'):
         lr_v = tf.Variable(lr, trainable=False)
 
     g_optim = tf.train.AdamOptimizer(lr_v, beta1=beta1).minimize(g_loss, var_list=g_vars)
     d_optim = tf.train.AdamOptimizer(lr_v, beta1=beta1).minimize(d_loss, var_list=d_vars)
+    pg_optim = tf.train.RMSPropOptimizer(0.0001, decay=0.9).minimize(pg_loss, var_list=pg_vars)
 
     # ==================================== TRAINING ==================================== #
 
@@ -243,21 +255,39 @@ def main_train():
     best_nmse = np.inf
     best_epoch = 1
     esn = early_stopping_num
-    alpha_decay = 1
-    beta_decay = 1
+    alpha = config.TRAIN.g_alpha
+    beta = config.TRAIN.g_beta
+    time_step = 0
+    episode_no = 0
+
+    # States
+    prev_alpha = 0
+    prev_beta = 0
+    prev_mse = 0
+    prev_fft = 0
+    prev_vgg = 0
+    s_full_state = np.zeros((episode_size, 5 * history_size))
+    cur_state = []
+    rewards = np.zeros(episode_size)
+    actions = np.zeros(episode_size)
+    update_episode = False
+
+    # Histories
+    s_alpha = np.zeros(history_size)
+    s_beta = np.zeros(history_size)
+    s_nmse = np.zeros(history_size)
+    s_fft = np.zeros(history_size)
+    s_vgg = np.zeros(history_size)
+    s_alpha_g = np.zeros(history_size)
+    s_beta_g = np.zeros(history_size)
+    s_nmse_g = np.zeros(history_size)
+    s_fft_g = np.zeros(history_size)
+    s_vgg_g = np.zeros(history_size)
+
+    # Initialise probs for choosing actions
+    prob = [0.2, 0.2, 0.2, 0.2, 0.2]
 
     for epoch in range(0, n_epoch):
-        alpha_decay *= 0.1
-        beta_decay *= 0.1
-        sess.run(tf.assign(g_alpha_v, g_alpha * alpha_decay))
-        sess.run(tf.assign(g_beta_v, g_beta * beta_decay))
-        log = " ** new alpha: %f" % (g_alpha * alpha_decay)
-        print(log)
-        log_all.debug(log)
-        log = " ** new beta: %f" % (g_beta * beta_decay)
-        print(log)
-        log_all.debug(log)
-
         # learning rate decay
         if epoch != 0 and (epoch % decay_every == 0):
             new_lr_decay = lr_decay ** (epoch // decay_every)
@@ -283,9 +313,87 @@ def main_train():
             errG, errG_perceptual, errG_nmse, errG_fft, _ = sess.run([g_loss, g_perceptual, g_nmse, g_fft, g_optim],
                                                                      {t_image_good_244: X_good_244,
                                                                       t_image_good: X_good_aug,
-                                                                      t_image_bad: X_bad})
+                                                                      t_image_bad: X_bad,
+                                                                      t_alpha: [alpha],
+                                                                      t_beta: [beta]})
+            
+            # Add latest state
+            if time_step != 0:
+                # Update histories
+                insert(s_alpha, alpha)
+                insert(s_beta, beta)
+                insert(s_nmse, errG_nmse)
+                insert(s_fft, errG_fft)
+                insert(s_vgg, errG_perceptual)
+                insert(s_alpha_g, alpha - prev_alpha)
+                insert(s_beta_g, beta - prev_beta)
+                insert(s_nmse_g, errG_nmse - prev_mse)
+                insert(s_fft_g, errG_fft - prev_fft)
+                insert(s_vgg_g, errG_perceptual - prev_vgg)
 
-            log = "Epoch[{:3}/{:3}] step={:3} d_loss={:5} g_loss={:5} g_perceptual_loss={:5} g_mse={:5} g_freq={:5} took {:3}s".format(
+            # Update previous 
+            prev_alpha = alpha
+            prev_beta = beta
+            prev_mse = errG_nmse
+            prev_fft = errG_fft
+            prev_vgg = errG_perceptual
+
+            # One state
+            if time_step != 0 and time_step % (history_size) == 0:
+                cur_state = np.array([
+                    # s_alpha,
+                    s_alpha_g,
+                    # s_beta,
+                    s_beta_g,
+                    # s_nmse,
+                    s_nmse_g,
+                    # s_fft,
+                    s_fft_g,
+                    # s_vgg,
+                    s_vgg_g
+                ])
+                cur_state = scale(cur_state)
+                cur_state = cur_state.flatten()
+                cur_state = cur_state.reshape(1, 5 * history_size)
+                insert(s_full_state, cur_state)
+                
+                # Calculate reward
+                vgg_grad_avg = np.average(s_vgg_g)
+
+                if vgg_grad_avg < 0:
+                    insert(rewards, 1)
+                elif vgg_grad_avg > 0:
+                    insert(rewards, -1)
+                else:
+                    insert(rewards, 0)
+
+                # Update actions
+                prob = sess.run(sampling_prob, feed_dict={t_states: cur_state})
+                action = tl.rein.choice_action_by_probs(prob.flatten())
+                insert(actions, action)
+                alpha, beta = update_weights_v2(alpha, beta, action, 1.1, 0.01, 50)
+                
+                episode_no += 1
+                update_episode = True
+                
+            # Update alpha, beta
+            if episode_no != 0 and episode_no % episode_size == 0 and update_episode:
+                print("updating RL params")
+                disR = tl.rein.discount_episode_rewards(rewards)
+                meanR = np.mean(disR)
+                stdR = np.std(disR)
+                disR = (disR - meanR) / stdR
+                print(s_full_state.shape, actions.shape, disR.shape)
+                sess.run(pg_optim, feed_dict={
+                    t_states: s_full_state,
+                    t_actions: actions,
+                    t_discount_rewards: disR
+                })
+                update_episode = False
+
+            time_step += 1
+
+            log = "Epoch[{:3}/{:3}] step={:3} d_loss={:5} g_loss={:5} g_perceptual_loss={:5} g_mse={:5} g_freq={:5} a={:3} b={:3} probs={} took {:3}s".format(
                 epoch + 1,
                 n_epoch,
                 step,
@@ -294,6 +402,9 @@ def main_train():
                 round(float(errG_perceptual), 3),
                 round(float(errG_nmse), 3),
                 round(float(errG_fft), 3),
+                round(alpha, 3),
+                round(beta, 3),
+                prob,
                 round(time.time() - step_time, 2))
 
             print(log)

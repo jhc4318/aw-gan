@@ -10,8 +10,8 @@ losses = "loss1d_50.csv"
 df = pd.read_csv(os.path.join(path, losses))
 fig, ax = plt.subplots()
 
-y1 = "g_perceptual_loss"
-y2 = "g_mse"
+y1 = "g_loss"
+y2 = "d_loss"
 ax.plot(df.index, df[y1], color="red", linewidth=0.8)
 ax.set_xlabel("Step")
 ax.set_ylabel(y1, color="red")
