@@ -3,6 +3,5 @@
 *.npz
 .vscode
 __pycache__
-*.sh
 *.png
 *.gz
